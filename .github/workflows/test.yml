@@ -33,22 +33,22 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  # Vulnerability check on the DEVELOPMENT tree -- what `npm ci` at the repo
-  # root installs, which is a superset of what is deployed.
+  # Vulnerability check on the app's production dependency set, at the repo
+  # root. Clean as of 2026-08: 0 advisories, where it was 43 (3 critical, 27
+  # high) while the framework still declared the UI5 runtime openui5-dist as
+  # a runtime dependency -- 611 MB of deprecated release tooling (npm@6,
+  # request, jsdom) that the app never loads. It is now a devDependency here
+  # and an optional peer dependency of the framework, so `--omit=dev` no
+  # longer sees it. `npm ci` at the root still installs it, for the
+  # /resources mount `cds watch` serves locally; that development-only tree
+  # is deliberately not what this job measures.
   #
-  # The tree that actually ships is audited as a HARD gate in
-  # deploy-check.yml, against the staged gen/srv module: 0 advisories, 19 MB.
-  # This job sees more than that, because the app root still installs
-  # openui5-dist (the local UI5 runtime `cds watch` serves at /resources).
-  # That package is deprecated and its own dependencies are its release
-  # tooling -- npm@6, request, jsdom, simple-git -- which is where every
-  # advisory below comes from, none of it code the app runs, and none of it
-  # deployed: scripts/vendor-core.js drops it from the production build.
-  #
-  # So this stays advisory (`continue-on-error`): it is a standing reminder
-  # about a development-only dependency, not a gate on shipping. It goes
-  # green for good when the core package stops declaring openui5-dist as a
-  # runtime dependency (see builder-abap2UI5-js:src/package.json).
+  # Advisory (`continue-on-error`) rather than blocking, and not because the
+  # baseline is dirty: the hard gate on the same question lives in
+  # deploy-check.yml, which audits the STAGED gen/srv module -- the bytes
+  # that are actually pushed. This job is the earlier, cheaper signal on the
+  # same set. A finding in either is fixed in builder-cap2UI5:src/, not
+  # here.
   #
   # (Lint is deliberately NOT here: the app's source is linted where it is
   # written, in builder-cap2UI5's own eslint run over src/srv and src/test.
@@ -61,6 +61,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-      - name: npm audit (development tree — advisory)
+      - name: npm audit (production dependencies — advisory)
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
